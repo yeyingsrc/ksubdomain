@@ -18,6 +18,6 @@ const banner = `
 func ShowBanner(silent bool) {
 	if !silent {
 		fmt.Printf(banner)
+		gologger.Infof("Current Version: %s\n", conf.Version)
 	}
-	gologger.Infof("Current Version: %s\n", conf.Version)
 }

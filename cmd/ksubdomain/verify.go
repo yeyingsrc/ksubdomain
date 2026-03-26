@@ -61,9 +61,10 @@ var commonFlags = []cli.Flag{
 	
 	// Silent mode
 	&cli.BoolFlag{
-		Name:  "silent",
-		Usage: "Silent mode: only output domain names to screen",
-		Value: false,
+		Name:    "silent",
+		Aliases: []string{"s"},
+		Usage:   "Silent mode: only output domain names to screen",
+		Value:   false,
 	},	
 	// Colorized output
 	&cli.BoolFlag{

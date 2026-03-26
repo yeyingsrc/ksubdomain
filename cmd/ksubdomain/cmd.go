@@ -22,7 +22,7 @@ func main() {
 		Before: func(c *cli.Context) error {
 			silent := false
 			for _, arg := range os.Args {
-				if arg == "--silent" {
+				if arg == "--silent" || arg == "-s" {
 					silent = true
 					break
 				}

@@ -2,194 +2,265 @@
 
 [![Release](https://img.shields.io/github/release/boy-hack/ksubdomain.svg)](https://github.com/boy-hack/ksubdomain/releases) [![Go Report Card](https://goreportcard.com/badge/github.com/boy-hack/ksubdomain)](https://goreportcard.com/report/github.com/boy-hack/ksubdomain) [![License](https://img.shields.io/github/license/boy-hack/ksubdomain)](https://github.com/boy-hack/ksubdomain/blob/main/LICENSE)
 
-**KSubdomain 是一款基于无状态技术的子域名爆破工具，带来前所未有的扫描速度和极低的内存占用。** 告别传统工具的效率瓶颈，体验闪电般的 DNS 查询，同时拥有可靠的状态表重发机制，确保结果的完整性。 KSubdomain 支持 Windows、Linux 和 macOS，是进行大规模DNS资产探测的理想选择。
+[English](./README_EN.md) | **中文**
 
-![](image.gif)
+**KSubdomain 是一款基于无状态技术的子域名爆破工具，带来前所未有的扫描速度和极低的内存占用。** 采用原始套接字直接操作网络适配器，绕过系统内核协议栈，配合可靠的状态表重发机制，确保结果完整性。支持 Windows、Linux、macOS，是大规模 DNS 资产探测的首选工具。
 
 ## 🚀 核心优势
 
-*   **闪电般的速度:** 采用无状态扫描技术，直接操作网络适配器进行原始套接字发包，绕过系统内核的网络协议栈，实现惊人的发包速率。通过 `test` 命令可探测本地网卡的最大发送速度。
-*   **极低的资源消耗:** 创新的内存管理机制，包括对象池和全局内存池，显著降低内存分配和 GC 压力，即使处理海量域名也能保持低内存占用。
-*   **无状态设计:** 类似 Masscan 的无状态扫描，不从系统维护状态表，自建轻量状态表，从根本上解决了传统扫描工具的内存瓶颈和性能限制，以及解决了无状态扫描漏包问题。
-*   **可靠的重发:** 内建智能重发机制，有效应对网络抖动和丢包，确保结果的准确性和完整性。
-*   **跨平台支持:** 完美兼容 Windows, Linux, macOS。
-*   **易于使用:** 简洁的命令行接口，提供验证 (verify) 和枚举 (enum) 两种模式，并内置常用字典。
+- **闪电般的速度：** 无状态扫描直接操作网卡，速度是 massdns 的 **7 倍**，dnsx 的 **10 倍**以上
+- **极低资源消耗：** 对象池 + 全局内存池，海量域名处理依然低内存占用
+- **动态超时自适应：** 基于 TCP RFC 6298 RTT 滑动均值（EWMA）动态调整超时，无需手动调参
+- **多网卡并发发包：** 支持 `--interface` 重复指定多张网卡，叠加带宽、利用多个出口 IP
+- **流式 SDK：** 提供 `EnumStream`/`VerifyStream` 回调 API，实时处理结果
+- **跨平台支持：** Windows、Linux、macOS 完美兼容
 
-## ⚡ 性能亮点
+## ⚡ 性能对比
 
-KSubdomain 在速度和效率上远超同类工具。以下是在 4 核 CPU、5M 带宽网络环境下，使用 10 万字典进行的对比测试：
+4 核 CPU、5M 带宽，10 万字典测试：
 
-| 工具         | 扫描模式 | 发包方式     | 命令                                                                       | 耗时           | 成功个数 | 备注                      |
-| ------------ | -------- | ------------ | -------------------------------------------------------------------------- | -------------- | -------- | ------------------------- |
-| **KSubdomain** | 验证     | pcap 网卡发包 | `time ./ksubdomain v -b 5m -f d2.txt -o k.txt -r dns.txt --retry 3 --np`  | **~30 秒**     | 1397     | `--np` 关闭实时打印       |
-| massdns      | 验证     | pcap/socket  | `time ./massdns -r dns.txt -t A -w m.txt d2.txt --root -o L`                 | ~3 分 29 秒    | 1396     |                           |
-| dnsx         | 验证     | socket       | `time ./dnsx -a -o d.txt -r dns.txt -l d2.txt -retry 3 -t 5000`             | ~5 分 26 秒    | 1396     | `-t 5000` 设置 5000 并发 |
-
-**结论:** KSubdomain 的速度是 massdns 的 **7 倍**，是 dnsx 的 **10 倍** 以上！
-## 🛠️ 技术革新 (v2.0)
-
-KSubdomain 2.0 版本引入了多项底层优化，进一步压榨性能潜力：
-
-1.  **状态表优化:**
-    *   **分片锁 (Sharded Lock):** 替代全局锁，大幅减少锁竞争，提高并发写入效率。
-    *   **高效哈希:** 优化键值存储，均匀分布域名，提升查找速度。
-2.  **发包机制优化:**
-    *   **对象池:** 复用 DNS 包结构体，减少内存分配和 GC 开销。
-    *   **模板缓存:** 为相同 DNS 服务器复用以太网/IP/UDP 层数据，减少重复构建开销。
-    *   **并行发送:** 多协程并行发包，充分利用多核 CPU 性能。
-    *   **批量处理:** 批量发送域名请求，减少系统调用和上下文切换。
-3.  **接收机制优化:**
-    *   **对象池:** 复用解析器和缓冲区，降低内存消耗。
-    *   **并行处理管道:** 接收 → 解析 → 处理三阶段并行，提高处理流水线效率。
-    *   **缓冲区优化:** 增加内部 Channel 缓冲区大小，避免处理阻塞。
-    *   **高效过滤:** 优化 BPF 过滤规则和包处理逻辑，快速丢弃无效数据包。
-4.  **内存管理优化:**
-    *   **全局内存池:** 引入 `sync.Pool` 管理常用数据结构，减少内存分配和碎片。
-    *   **结构复用:** 复用 DNS 查询结构和序列化缓冲区。
-5.  **架构与并发优化:**
-    *   **动态并发:** 根据 CPU 核心数自动调整协程数量。
-    *   **高效随机数:** 使用性能更优的随机数生成器。
-    *   **自适应速率:** 根据网络状况和系统负载动态调整发包速率。
-    *   **批量加载:** 批量加载和处理域名，降低单个域名处理的固定开销。
+| 工具 | 方式 | 耗时 | 成功数 |
+|------|------|------|--------|
+| **KSubdomain** | pcap 网卡发包 | **~30 秒** | 1397 |
+| massdns | pcap/socket | ~3 分 29 秒 | 1396 |
+| dnsx | socket | ~5 分 26 秒 | 1396 |
 
 ## 📦 安装
 
-1.  **下载预编译二进制文件:** 前往 [Releases](https://github.com/boy-hack/ksubdomain/releases) 页面下载对应系统的最新版本。
-2.  **安装 `libpcap` 依赖:**
-    *   **Windows:** 下载并安装 [Npcap](https://npcap.com/) 驱动 (WinPcap 可能无效)。
-    *   **Linux:** 已静态编译打包 `libpcap`，通常无需额外操作。若遇问题，请尝试安装 `libpcap-dev` 或 `libcap-devel` 包。
-    *   **macOS:** 系统自带 `libpcap`，无需安装。
-3.  **赋予执行权限 (Linux/macOS):** `chmod +x ksubdomain`
-4.  **运行!**
+### 下载预编译二进制
 
-### 源码编译 (可选)
+前往 [Releases](https://github.com/boy-hack/ksubdomain/releases) 下载对应系统的最新版本。
 
-确保您已安装 Go 1.23 版本和 `libpcap` 环境。
+**依赖安装：**
+- **Windows：** 安装 [Npcap](https://npcap.com/) 驱动
+- **Linux：** 已静态编译，通常无需操作；如有问题安装 `libpcap-dev`
+- **macOS：** 系统自带 libpcap，无需安装
+
+### 源码编译
 
 ```bash
-go install -v github.com/boy-hack/ksubdomain/v2/cmd/ksubdomain@latest
-# 二进制文件通常位于 $GOPATH/bin 或 $HOME/go/bin
+git clone https://github.com/boy-hack/ksubdomain.git
+cd ksubdomain
+# 建议通过 ldflags 注入版本号
+go build -ldflags "-X github.com/boy-hack/ksubdomain/v2/pkg/core/conf.Version=v2.x.y" \
+    -o ksubdomain ./cmd/ksubdomain
 ```
+
+或使用 `go install`：
+
+```bash
+go install github.com/boy-hack/ksubdomain/v2/cmd/ksubdomain@latest
+```
+
+> **注意：** 需要 root / `CAP_NET_RAW` 权限运行（原始套接字抓包）
 
 ## 📖 使用说明
 
-```bash
-KSubdomain - 极速无状态子域名爆破工具
-
+```
 用法:
-  ksubdomain [全局选项] 命令 [命令选项] [参数...]
-
-版本:
-  查看版本信息: ksubdomain --version
+  ksubdomain [全局选项] <命令> [命令选项]
 
 命令:
-  enum, e    枚举模式: 提供主域名进行爆破
-  verify, v  验证模式: 提供域名列表进行验证
-  test       测试本地网卡最大发包速度
-  help, h    显示命令列表或某个命令的帮助
+  enum, e      枚举模式：对主域名进行子域名爆破
+  verify, v    验证模式：验证域名列表是否解析
+  test         测试本地网卡最大发包速度
+  device       查看可用网卡信息
+  help, h      显示帮助
 
 全局选项:
-  --help, -h     显示帮助 (默认: false)
-  --version, -v  打印版本信息 (默认: false)
+  --help, -h       显示帮助
+  --version, -v    打印版本信息
 ```
 
-### 验证模式 (Verify)
+### 验证模式（verify）
 
-验证模式用于快速检查提供的域名列表的存活状态。
+验证提供的域名列表是否有 DNS 解析记录。
+
+```
+选项:
+  --domain, -d          指定域名（可重复）
+  --filename, -f        从文件读取域名列表
+  --stdin               从标准输入读取
+  --bandwidth, -b       带宽限制，如 5m、10m、100m（默认 3m）
+  --resolvers, -r       指定 DNS 服务器（默认使用内置）
+  --output, -o          输出文件路径
+  --format, -f          输出格式：txt（默认）、json、csv、jsonl
+  --silent, -s          安静模式，仅输出域名（不显示 banner 和日志）
+  --only-domain, --od   只输出域名，不显示 IP/记录
+  --retry               重试次数，-1 表示无限重试（默认 3）
+  --timeout             单次查询超时秒数（默认 6）
+  --interface, -e       指定网卡名（可重复，多网卡并发）
+  --wildcard-filter     泛解析过滤：none（默认）、basic、advanced
+  --predict             启用子域名预测模式
+  --quiet, -q           不打印结果到屏幕（仅写文件）
+  --color, -c           彩色输出
+```
 
 ```bash
-./ksubdomain verify -h # 查看验证模式帮助，可缩写 ksubdomain v
+# 验证单个/多个域名
+./ksubdomain v -d www.example.com -d mail.example.com
 
-USAGE:
-   ksubdomain verify [command options] [arguments...]
-
-OPTIONS:
-   --filename value, -f value       验证域名的文件路径
-   --domain value, -d value         域名
-   --band value, -b value           宽带的下行速度，可以5M,5K,5G (default: "3m")
-   --resolvers value, -r value      dns服务器，默认会使用内置dns
-   --output value, -o value         输出文件名
-   --output-type value, --oy value  输出文件类型: json, txt, csv (default: "txt")
-   --silent                         使用后屏幕将仅输出域名 (default: false)
-   --retry value                    重试次数,当为-1时将一直重试 (default: 3)
-   --timeout value                  超时时间 (default: 6)
-   --stdin                          接受stdin输入 (default: false)
-   --not-print, --np                不打印域名结果 (default: false)
-   --eth value, -e value            指定网卡名称
-   --wild-filter-mode value         泛解析过滤模式[从最终结果过滤泛解析域名]: basic(基础), advanced(高级), none(不过滤ne")
-   --predict                        启用预测域名模式 (default: false)
-   --help, -h                       show help (default: false)
-
-# 示例:
-# 验证多个域名解析
-./ksubdomain v -d xx1.example.com -d xx2example.com
-
-# 从文件读取域名进行验证，保存为 output.txt
+# 从文件读取，保存为 txt
 ./ksubdomain v -f domains.txt -o output.txt
 
-# 从标准输入读取域名，带宽限制为 10M
-cat domains.txt | ./ksubdomain v --stdin -b 10M
+# 管道输入，带宽 10M，静默模式对接下游工具
+cat domains.txt | ./ksubdomain v --stdin -b 10m -s --od | httpx -silent
 
-# 启用预测模式，泛解析过滤，保存为csv
-./ksubdomain v -f domains.txt --predict --wild-filter-mode advanced --oy csv -o output.csv
+# 高级泛解析过滤，输出 JSONL
+./ksubdomain v -f domains.txt --wildcard-filter advanced --format jsonl -o output.jsonl
+
+# 多网卡并发（叠加带宽）
+./ksubdomain v -f domains.txt --interface eth0 --interface eth1
 ```
 
-### 枚举模式 (Enum)
+### 枚举模式（enum）
 
-枚举模式基于字典和预测算法爆破指定域名下的子域名。
+基于字典和预测算法爆破指定域名下的子域名。
+
+```
+选项:
+  --domain, -d          目标主域名（可重复）
+  --domain-list, --ds   批量主域名文件
+  --filename, -f        字典文件路径（默认使用内置字典）
+  --use-ns-records      读取域名 NS 记录并加入 DNS 解析器
+  （其余选项同 verify 模式）
+```
 
 ```bash
-./ksubdomain enum -h # 查看枚举模式帮助,可简写 ksubdomain e
+# 枚举单个域名（使用内置字典）
+./ksubdomain e -d example.com
 
-USAGE:
-   ksubdomain enum [command options] [arguments...]
+# 指定字典文件
+./ksubdomain e -d example.com -f subdomains.txt -o result.txt
 
-OPTIONS:
-   --domain value, -d value         域名
-   --band value, -b value           宽带的下行速度，可以5M,5K,5G (default: "3m")
-   --resolvers value, -r value      dns服务器，默认会使用内置dns
-   --output value, -o value         输出文件名
-   --output-type value, --oy value  输出文件类型: json, txt, csv (default: "txt")
-   --silent                         使用后屏幕将仅输出域名 (default: false)
-   --retry value                    重试次数,当为-1时将一直重试 (default: 3)
-   --timeout value                  超时时间 (default: 6)
-   --stdin                          接受stdin输入 (default: false)
-   --not-print, --np                不打印域名结果 (default: false)
-   --eth value, -e value            指定网卡名称
-   --wild-filter-mode value         泛解析过滤模式[从最终结果过滤泛解析域名]: basic(基础), advanced(高级), none(不过滤) (default: "none")
-   --predict                        启用预测域名模式 (default: false)
-   --filename value, -f value       字典路径
-   --ns                             读取域名ns记录并加入到ns解析器中 (default: false)
-   --help, -h                       show help (default: false)
+# 启用预测模式 + 高级泛解析过滤
+./ksubdomain e -d example.com --predict --wildcard-filter advanced
 
-# 示例:
-# 枚举多个域名
-./ksubdomain e -d example.com -d hacker.com
+# 批量枚举多个主域名
+./ksubdomain e --domain-list roots.txt -b 10m --format jsonl -o result.jsonl
 
-# 从文件读取字典枚举，保存为 output.txt
-./ksubdomain e -f sub.dict -o output.txt
-
-# 从标准输入读取域名，带宽限制为 10M
-cat domains.txt | ./ksubdomain e --stdin -b 10M
-
-# 启用预测模式枚举域名，泛解析过滤，保存为csv
-./ksubdomain e -d example.com --predict --wild-filter-mode advanced --oy csv -o output.csv
+# 管道对接 httpx
+./ksubdomain e -d example.com --od -s | httpx -silent
 ```
 
-## ✨ 特性与技巧
+### 测试/设备命令
 
-*   **带宽自动适配:** 只需使用 `-b` 参数指定你的公网下行带宽 (如 `-b 10m`), KSubdomain 会自动优化发包速率。
-*   **测试最大速率:** 运行 `./ksubdomain test` 测试当前环境的最大理论发包速率。
-*   **自动网卡检测:** KSubdomain 会自动检测可用网卡。
-*   **进度显示:** 实时进度条显示 成功数 / 发送数 / 队列长度 / 接收数 / 失败数 / 已耗时。
-*   **参数调优:** 根据网络质量和目标域名数量，调整 `--retry` 和 `--timeout` 参数以获得最佳效果。当 `--retry` 为 -1 时，将无限重试直至所有请求成功或超时。
-*   **多种输出格式:** 支持 `txt` (实时输出), `json` (完成后输出), `csv` (完成后输出)。通过 `-o` 指定文件名后缀即可 (如 `result.json`)。
-*   **环境变量配置:**
-    *   `KSubdomainConfig`: 指定配置文件的路径。
+```bash
+# 测试网卡最大发包速度
+./ksubdomain test
+
+# 查看可用网卡
+./ksubdomain device
+```
+
+## ✨ 功能特性
+
+### 动态超时自适应
+无需手动设置 `--timeout`，引擎自动基于实测 RTT（指数加权移动平均，EWMA α=0.125）动态调整超时上下界，有效减少漏报同时避免不必要等待。
+
+### 多网卡并发
+重复指定 `--interface` 即可使用多张网卡同时发包，多个 goroutine 共享同一 `domainChan` 竞争消费，天然实现负载均衡：
+
+```bash
+./ksubdomain e -d example.com --interface eth0 --interface eth1 -b 20m
+```
+
+### 预测模式
+启用 `--predict` 后，工具会根据已发现的子域名预测可能存在的相关子域名，提升发现率。
+
+### 泛解析过滤
+- `none`：不过滤（默认）
+- `basic`：基础过滤，剔除明显泛解析 IP
+- `advanced`：高级过滤，综合多维度判断
+
+### 输出格式
+
+| 格式 | 说明 | 适用场景 |
+|------|------|---------|
+| `txt` | `域名 => 记录`，实时输出 | 默认，人工查看 |
+| `json` | 完整 JSON，完成后写入 | 程序解析 |
+| `csv` | CSV 表格，完成后写入 | 数据分析 |
+| `jsonl` | 每行一条 JSON，实时输出 | 流式处理、管道对接 |
+
+## 🔗 工具联动示例
+
+```bash
+# 联动 httpx 探测存活 Web
+./ksubdomain e -d example.com -s --od | httpx -silent
+
+# 联动 nuclei 漏洞扫描
+./ksubdomain e -d example.com -s --od | nuclei -l /dev/stdin
+
+# JSONL 流式处理，只取 A 记录
+./ksubdomain e -d example.com --format jsonl | jq -r 'select(.type=="A") | .domain'
+
+# 多域名批量 + 去重
+./ksubdomain e --domain-list roots.txt -s --od | sort -u > all_subs.txt
+```
+
+## 🌐 平台注意事项
+
+**macOS：**
+```bash
+# BPF 缓冲区较小，建议限制带宽
+sudo ./ksubdomain e -d example.com -b 5m
+```
+
+**WSL/WSL2：**
+```bash
+# 通常使用 eth0
+./ksubdomain e -d example.com --interface eth0
+```
+
+**Windows：**
+```bash
+# 需先安装 Npcap，以管理员权限运行
+.\ksubdomain.exe enum -d example.com
+```
+
+## 🧩 Go SDK
+
+```bash
+go get github.com/boy-hack/ksubdomain/v2/sdk
+```
+
+```go
+import "github.com/boy-hack/ksubdomain/v2/sdk"
+
+scanner := sdk.NewScanner(&sdk.Config{
+    Bandwidth:      "5m",
+    Retry:          3,
+    WildcardFilter: "advanced",
+})
+
+// 阻塞式，收集所有结果
+results, err := scanner.Enum("example.com")
+
+// 流式回调，实时处理
+err = scanner.EnumStream(ctx, "example.com", func(r sdk.Result) {
+    fmt.Printf("%s => %v\n", r.Domain, r.Records)
+})
+```
+
+详见 [SDK 文档](./sdk/README.md) 和 [API 文档](./docs/api.md)。
+
+## 🧪 测试
+
+```bash
+# 单元测试（无需 root）
+go test ./pkg/...
+
+# 回归测试（需要 root + 网络）
+go build -o ksubdomain ./cmd/ksubdomain
+sudo go test ./test/regression/... -tags regression -v -timeout 120s
+```
 
 ## 💡 参考
 
-*   原 KSubdomain 项目: [https://github.com/knownsec/ksubdomain](https://github.com/knownsec/ksubdomain)
-*   从 Masscan, Zmap 源码分析到开发实践: [https://paper.seebug.org/1052/](https://paper.seebug.org/1052/)
-*   KSubdomain 无状态域名爆破工具介绍: [https://paper.seebug.org/1325/](https://paper.seebug.org/1325/)
-*   KSubdomain 与 massdns 的对比分析: [微信公众号文章链接](https://mp.weixin.qq.com/s?__biz=MzU2NzcwNTY3Mg==&mid=2247484471&idx=1&sn=322d5db2d11363cd2392d7bd29c679f1&chksm=fc986d10cbefe406f4bda22f62a16f08c71f31c241024fc82ecbb8e41c9c7188cfbd71276b81&token=76024279&lang=zh_CN#rd)
+- 原 KSubdomain 项目：[knownsec/ksubdomain](https://github.com/knownsec/ksubdomain)
+- 无状态扫描原理：[paper.seebug.org/1052](https://paper.seebug.org/1052/)
+- KSubdomain 介绍：[paper.seebug.org/1325](https://paper.seebug.org/1325/)
+
+## 📜 License
+
+MIT License — 详见 [LICENSE](LICENSE)

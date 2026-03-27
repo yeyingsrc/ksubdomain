@@ -172,9 +172,30 @@ brew install libpcap
 Use the `build.sh` script which sets the correct `CGO_ENABLED` and
 `CC` for each target platform.
 
+### How do I use multiple network interfaces?
+
+Repeat `--interface` (or `--eth`) to send from multiple NICs simultaneously:
+
+```bash
+sudo ksubdomain enum -d example.com --interface eth0 --interface eth1 -b 20m
+```
+
 ---
 
-## Exit codes
+## Flags renamed in v2.4+
+
+Several flag names changed for clarity. Old aliases still work for backward-compat.
+
+| Old flag | New recommended flag |
+|----------|---------------------|
+| `--band` / `-b` | `--bandwidth` |
+| `--eth` | `--interface` |
+| `--wild-filter-mode` | `--wildcard-filter` |
+| `--not-print` / `--np` | `--quiet` / `-q` |
+| `--output-type` | `--format` |
+| `-s` | `--silent` (also `-s`) |
+
+---
 
 | Code | Meaning |
 |---|---|

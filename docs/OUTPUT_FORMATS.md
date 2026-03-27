@@ -101,6 +101,8 @@ One JSON object per line, perfect for streaming.
 
 ### Usage
 ```bash
+./ksubdomain enum -d example.com --format jsonl -o results.jsonl
+# or using legacy alias
 ./ksubdomain enum -d example.com --oy jsonl -o results.jsonl
 ```
 

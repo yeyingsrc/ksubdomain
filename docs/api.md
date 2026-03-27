@@ -13,7 +13,8 @@ type Config struct {
     Bandwidth      string             // bandwidth cap, e.g. "5m" (default "5m")
     Retry          int                // per-domain retry count, -1 = infinite (default 3)
     Resolvers      []string           // DNS resolver IPs; nil = built-in defaults
-    Device         string             // network interface; "" = auto-detect
+    Device         string             // single network interface; "" = auto-detect (backward-compat)
+    Devices        []string           // multi-NIC: takes precedence over Device when non-empty
     Dictionary     string             // wordlist file for Enum; "" = built-in list
     Predict        bool               // enable AI subdomain prediction
     WildcardFilter string             // "none" | "basic" | "advanced" (default "none")

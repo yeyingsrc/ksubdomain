@@ -4,15 +4,18 @@
 
 | Requirement | Notes |
 |---|---|
-| OS | Linux, macOS, Windows (WSL2 recommended) |
+| OS | Linux, macOS, Windows |
 | Privileges | **root** or `CAP_NET_RAW` — raw packet capture requires elevated access |
 | libpcap / npcap | Linux: `libpcap-dev`; macOS: built-in; Windows: [Npcap](https://npcap.com) |
+| Go (build only) | 1.23+ |
 
 ---
 
 ## Installation
 
 ### Download pre-built binary (recommended)
+
+Visit [Releases](https://github.com/boy-hack/ksubdomain/releases) and download the binary for your platform.
 
 ```bash
 # Linux x86_64
@@ -26,19 +29,31 @@ chmod +x /usr/local/bin/ksubdomain
 ```bash
 git clone https://github.com/boy-hack/ksubdomain.git
 cd ksubdomain
-go build -o ksubdomain ./cmd/ksubdomain
-# or use the build script (cross-compile all platforms):
-./build.sh
+# Inject version via ldflags (recommended)
+go build -ldflags "-X github.com/boy-hack/ksubdomain/v2/pkg/core/conf.Version=v2.x.y" \
+    -o ksubdomain ./cmd/ksubdomain
 ```
 
 ---
 
 ## Your first scan
 
-### 1 — Enumerate subdomains (built-in wordlist)
+### 1 — Check available network interfaces
 
 ```bash
-sudo ksubdomain enum -d example.com
+sudo ./ksubdomain device
+```
+
+### 2 — Test maximum packet rate
+
+```bash
+sudo ./ksubdomain test
+```
+
+### 3 — Enumerate subdomains (built-in wordlist)
+
+```bash
+sudo ./ksubdomain enum -d example.com
 ```
 
 Sample output:
@@ -49,93 +64,87 @@ mail.example.com => 93.184.216.50
 api.example.com => 93.184.216.51
 ```
 
-### 2 — Enumerate with a custom wordlist
+### 4 — Verify a domain list
 
 ```bash
-sudo ksubdomain enum -d example.com -f /path/to/wordlist.txt
+sudo ./ksubdomain verify -f domains.txt -o output.txt
 ```
-
-### 3 — Verify a list of known subdomains
-
-```bash
-cat domains.txt | sudo ksubdomain verify
-# or
-sudo ksubdomain verify -f domains.txt
-```
-
-### 4 — Pipe into httpx
-
-```bash
-sudo ksubdomain enum -d example.com --silent --only-domain | httpx -silent
-```
-
-`--only-domain` prints one clean domain per line with no extra characters,
-making the output safe to pipe into any line-oriented tool.
 
 ---
 
-## Common flags
+## Common workflows
 
-| Flag | Short | Description |
-|---|---|---|
-| `--domain` | `-d` | Target domain (enum mode) |
-| `--file` | `-f` | Input file (wordlist for enum, domain list for verify) |
-| `--band` | `-b` | Bandwidth limit, e.g. `5m`, `100m` (default: `5m`) |
-| `--retry` | `-r` | Max retries per domain (default: `3`) |
-| `--resolvers` | | Custom DNS resolver IPs, comma-separated |
-| `--output` | `-o` | Output file path |
-| `--output-type` | `--ot` | Output format: `txt`, `json`, `csv`, `jsonl` |
-| `--only-domain` | `--od` | Print only the domain name, no record values |
-| `--silent` | | Suppress progress bar and informational logs |
-| `--wild-filter-mode` | | Wildcard filter: `none` (default), `basic`, `advanced` |
-| `--predict` | | Enable AI subdomain prediction |
-
----
-
-## Output formats
+### Pipe to httpx for HTTP probing
 
 ```bash
-# Plain text (default)
-sudo ksubdomain enum -d example.com -o results.txt
-
-# JSON Lines (jq-compatible, one object per line)
-sudo ksubdomain enum -d example.com -o results.jsonl --ot jsonl
-
-# Parse with jq
-jq '.domain' results.jsonl
-jq 'select(.type=="A") | .records[]' results.jsonl
+sudo ./ksubdomain enum -d example.com --only-domain --silent | httpx -silent
 ```
 
-See [docs/OUTPUT_FORMATS.md](./OUTPUT_FORMATS.md) for full format details.
-
----
-
-## Bandwidth tuning
-
-ksubdomain operates at the raw packet level and sends DNS queries at the
-rate you specify. Start conservatively and increase:
+### Save as JSONL for streaming processing
 
 ```bash
-# ~60 Mbit bandwidth cap (safe for most home connections)
-sudo ksubdomain enum -d example.com -b 60m
-
-# Max out a Gigabit interface
-sudo ksubdomain enum -d example.com -b 1000m
+sudo ./ksubdomain enum -d example.com --format jsonl -o result.jsonl
 ```
 
-See [docs/best-practices.md](./best-practices.md) for bandwidth and resolver advice.
+### Batch enumeration of multiple root domains
+
+```bash
+sudo ./ksubdomain enum --domain-list roots.txt -b 10m --format jsonl -o all.jsonl
+```
+
+### Predict + advanced wildcard filter
+
+```bash
+sudo ./ksubdomain enum -d example.com --predict --wildcard-filter advanced -o result.txt
+```
+
+### Multi-NIC parallel sending
+
+```bash
+sudo ./ksubdomain enum -d example.com --interface eth0 --interface eth1 -b 20m
+```
 
 ---
 
-## Troubleshooting quick reference
+## Platform notes
 
-| Symptom | Fix |
-|---|---|
-| `permission denied` | Run with `sudo` or grant `CAP_NET_RAW` |
-| `network device not found` | Specify interface with `--eth <name>`; list with `ip link show` |
-| `network device not active` | Bring interface up: `sudo ip link set <name> up` |
-| No results, no errors | Try `--wild-filter-mode none`; target domain may have wildcard DNS |
-| macOS `ENOBUFS` | Lower bandwidth: `-b 5m` |
-| WSL2 wrong interface | Add `--eth eth0` |
+### Linux
 
-For more, see [docs/faq.md](./faq.md).
+```bash
+# Grant CAP_NET_RAW instead of running as root (optional)
+sudo setcap cap_net_raw+ep ./ksubdomain
+
+./ksubdomain enum -d example.com
+```
+
+### macOS
+
+macOS uses BPF with smaller default buffers. Keep bandwidth conservative:
+
+```bash
+sudo ./ksubdomain enum -d example.com -b 5m
+```
+
+### WSL / WSL2
+
+```bash
+./ksubdomain enum -d example.com --interface eth0
+```
+
+### Windows
+
+1. Install [Npcap](https://npcap.com/) (WinPcap is not supported)
+2. Run as Administrator
+
+```bat
+.\ksubdomain.exe enum -d example.com
+```
+
+---
+
+## Next steps
+
+- [API Reference](./api.md)
+- [Best Practices](./best-practices.md)
+- [FAQ](./faq.md)
+- [SDK README](../sdk/README.md)

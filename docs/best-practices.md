@@ -131,7 +131,35 @@ For scans with millions of domains (e.g., combined wordlists):
 
 ---
 
-## SDK usage tips
+## Multi-NIC for higher throughput
+
+Repeat `--interface` to send from multiple adapters simultaneously.
+Each interface spawns an independent goroutine; they share the same domain
+channel, naturally load-balancing queries:
+
+```bash
+sudo ksubdomain enum -d example.com --interface eth0 --interface eth1 -b 20m
+```
+
+Equivalently in the SDK:
+
+```go
+scanner := sdk.NewScanner(&sdk.Config{
+    Bandwidth: "20m",
+    Devices:   []string{"eth0", "eth1"},
+})
+```
+
+---
+
+## Dynamic timeout
+
+The engine automatically adjusts the per-query timeout using an RTT
+sliding window (EWMA α=0.125, β=0.25, RFC 6298), bounded between 1 s
+and 10 s.  You rarely need to override `--timeout`; only do so if your
+network has unusually high or low latency.
+
+---
 
 ### Cancellation
 
